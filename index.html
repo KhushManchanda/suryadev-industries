@@ -72,6 +72,7 @@
   .row{display:grid;grid-template-columns:72px 1fr 1fr;gap:10px;align-items:center;
        background:var(--soil-800);border:1px solid var(--soil-700);border-left:4px solid var(--rc,var(--wheat));
        border-radius:8px;padding:9px 10px}
+  .row.tri{grid-template-columns:66px 1fr 1fr 1fr 1fr}
   .row.on{border-color:var(--wheat);background:var(--soil-700)}
   .rid{font-family:'Zilla Slab',serif;font-weight:700;font-size:16px;line-height:1.05}
   .rid small{display:block;font-family:'Karla',sans-serif;font-weight:400;font-size:10px;color:var(--paper-dim)}
@@ -97,7 +98,10 @@
   .note{margin-top:24px;border-left:3px solid var(--pen);padding:2px 0 2px 12px;font-size:13.5px;color:var(--paper-dim)}
   .note b{color:var(--paper)}
   footer{margin-top:22px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6C5F4E}
-  @media (max-width:430px){.row{grid-template-columns:62px 1fr 1fr;gap:7px}.cell input{font-size:14px;padding:5px}}
+  @media (max-width:430px){.row{grid-template-columns:62px 1fr 1fr;gap:7px}
+    .row.tri{grid-template-columns:46px 1fr 1fr 1fr 1fr;gap:4px}
+    .row.tri .cell input{font-size:12.5px;padding:4px 3px}
+    .row.tri .cell label{font-size:8.5px;letter-spacing:.04em}.cell input{font-size:14px;padding:5px}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -165,12 +169,11 @@
   </div>
 
   <p class="note">
-    <b>The triangle:</b> base 11 along the south, and its west side runs the full 47 — the 33 alongside
-    the field plus 14 more carrying on past the north boundary, where it meets the road at a point. The
-    road side comes to 48.3 karam by Pythagoras against the 49 on your sketch, so the drawing is about
-    1.5% out — normal for a hand chain measurement. The 3-karam strip on the west and south is drawn as a
-    metalled side road and back road, and left out of the area. Tap any plot to see every side in karam,
-    feet, metres and gaj at once.
+    <b>The triangle is held to its register area.</b> Sides 11 / 47 / 49 as chained give only 257.9
+    kar&sup2; by Heron — 30.6 gaj short of the paper figure — so the <b>Reg gaj</b> box (897.42) drives it
+    instead: the 47 and 49 stay put and the base opens to 11.38, which is what those three chained
+    lengths would have to be to hold that area. Clear the box to go back to pure Heron. The 3-karam strip
+    on the west and south is drawn as a metalled side road and back road, and left out of the area.
   </p>
   <footer>1 gaj = 1 square yard = 9 sq ft. Marla / kanal / acre converted from square feet at 272.25 sq ft per marla. Road width is illustrative, not measured.</footer>
 </div>
@@ -190,7 +193,7 @@ var SKETCH = {
     {id:"25/2", n:3,  s:3,  crop:"ploughed"},
     {id:"25/3", n:8,  s:8,  crop:"paddy"}
   ],
-  tri: {id:"Triangle", base:11, ext:14, road:49, crop:"fallow"}
+  tri: {id:"Triangle", base:11, side:47, road:49, reg:897.42, crop:"fallow"}
 };
 var CROPS = {
   wheat:   {base:"#C9A44C",row:"#A8813A",dark:"#8A6A2E",chip:"#D8A93A"},
@@ -226,14 +229,29 @@ function geom(){
     list.push(poly([[xn,0],[xn+n,0],[xs+s,D],[xs,D]]));
     xn+=n; xs+=s;
   }
-  var t=S.tri, base=+t.base||0, ext=+t.ext||0;
-  var apex=[xn,-ext], tri=poly([apex,[xn,0],[xs,D],[xs+base,D]]);
-  list.push(tri);
+  /* triangle from its three measured sides: base, side (along the field edge), road */
+  var t=S.tri, base=+t.base||0, side=+t.side||0, road=+t.road||0;
+  var ext=Math.max(0,side-D);
+  var A=[xn,-ext], B=[xs,D];
+  var vx=B[0]-A[0], vz=B[1]-A[1], dd=Math.hypot(vx,vz)||1;
+  var ex=vx/dd, ez=vz/dd, px=ez, pz=-ex;                 // px,pz points east
+  var xc=(dd*dd+road*road-base*base)/(2*dd);
+  var hh=road*road-xc*xc; hh=hh>0?Math.sqrt(hh):0;
+  var reg=+t.reg||0;
+  if(reg>0){                       // hold the 47 and 49, open the base until the area matches the register
+    var target=reg*9/(K*K);
+    hh=2*target/dd;
+    var rr=road*road-hh*hh; xc=rr>0?Math.sqrt(rr):0;
+  }
+  var C=[A[0]+ex*xc+px*hh, A[1]+ez*xc+pz*hh];
+  var baseOut=Math.hypot(C[0]-B[0],C[1]-B[1]);
+  list.push(poly([A,[xn,0],B,C]));
+  var maxX=Math.max(xs+base,C[0]), maxZ=Math.max(D,C[1]);
   return {
-    D:D, list:list, totalN:xn, totalS:xs, base:base, ext:ext,
-    apex:apex, foot:[xs+base,D], roadLen:Math.hypot(xs+base-xn, D+ext),
-    minZ:-ext, maxX:xs+base,
-    cx:(-TRACK + xs+base)/2, cz:(-ext + D + TRACK)/2
+    D:D, list:list, totalN:xn, totalS:xs, base:baseOut, baseIn:base, reg:reg, ext:ext, side:side,
+    apex:A, foot:C, roadLen:Math.hypot(C[0]-A[0],C[1]-A[1]),
+    minZ:-ext, maxX:maxX, maxZ:maxZ,
+    cx:(-TRACK+maxX)/2, cz:(-ext+maxZ+TRACK)/2
   };
 }
 function items(){ return S.strips.concat([S.tri]); }
@@ -425,7 +443,7 @@ function build(){
   band(ROADW,OFF+ROADW/2,0.04,new THREE.MeshLambertMaterial({map:roadTex}));
 
   /* 3 karam metalled road along the west (side) and south (back) */
-  var maxX=G.totalS+G.base+0.5, D=G.D;
+  var maxX=G.maxX+0.5, D=G.maxZ;
   function Lshape(inset,outset){
     var sp=new THREE.Shape(), north=8;
     sp.moveTo(-outset,north); sp.lineTo(-inset,north); sp.lineTo(-inset,-D+inset);
@@ -600,10 +618,16 @@ function renderRows(){
     var head='<div class="rid" style="color:'+chip+'">'+p.id+'<small>'+(isTri?"road side":"khasra")+'</small></div>';
     var meta;
     if(isTri){
-      meta='base '+len(p.base)+', standing side '+len(g.D+g.ext)+' ('+len(g.D)+' + '+len(g.ext)+
-           '), road side '+len(g.roadLen)+' <span style="color:#C4453A">[sketch: '+len(p.road)+']</span>'+
-           ' &nbsp;\u2192&nbsp; <b>'+area(q.area)+'</b><br>'+traditional(q.area)+' \u00B7 '+nf(q.area*K*K/9,0)+' gaj';
-      row.innerHTML=head+cell(i,"base","Base",p.base)+cell(i,"ext","Past north",p.ext)+
+      meta=(g.reg>0
+        ? 'held at the register area, so the '+len(p.side)+' and '+len(p.road)+
+          ' sides stay and the base opens to <b>'+len(g.base)+'</b> (chained as '+len(p.baseIn||p.base)+')'
+        : 'sides '+len(p.base)+' \u00B7 '+len(p.side)+' \u00B7 '+len(p.road)+', area by Heron')+
+           ' &nbsp;\u2192&nbsp; <b>'+area(q.area)+'</b><br>'+
+           'the '+len(p.side)+' side runs '+len(g.D)+' along the field and '+len(g.ext)+
+           ' past the north line<br>'+traditional(q.area)+' \u00B7 '+nf(q.area*K*K/9,0)+' gaj';
+      row.className+=" tri";
+      row.innerHTML=head+cell(i,"base","Base",p.base)+cell(i,"side","Side",p.side)+
+                    cell(i,"road","Road",p.road)+cell(i,"reg","Reg gaj",p.reg)+
                     '<div class="rmeta">'+meta+'</div>';
     }else{
       meta=len(p.n)+' north, '+len(p.s)+' south, '+len(g.D)+' deep &nbsp;\u2192&nbsp; <b>'+area(q.area)+
@@ -673,7 +697,7 @@ document.getElementById("copyBtn").onclick=function(){
   var g=geom(), all=items(), tot=0, lines=["KHASRA 24 & 25 \u2014 field plan","1 karam = "+K+" ft",""];
   all.forEach(function(p,i){
     var q=g.list[i]; tot+=q.area;
-    if(i===all.length-1) lines.push(p.id+"  base "+p.base+", side "+(g.D+g.ext)+", road side "+nf(g.roadLen,1)+" (karam)");
+    if(i===all.length-1) lines.push(p.id+"  sides "+nf(g.base,2)+" / "+p.side+" / "+p.road+" karam"+(g.reg>0?" (held to register "+p.reg+" gaj)":" (Heron)"));
     else lines.push(p.id+"  north "+p.n+", south "+p.s+", deep "+g.D+" (karam)");
     lines.push("   "+nf(q.area,1)+" kar2 = "+nf(q.area*K*K,0)+" sq ft = "+nf(q.area*K*K*SQFT2SQM,1)+" m2 = "+nf(q.area*K*K/9,0)+" gaj");
     lines.push("   "+traditional(q.area));
